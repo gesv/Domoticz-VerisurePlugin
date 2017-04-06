@@ -4,13 +4,14 @@ Verisure session, using verisure app api
 
 import base64
 import json
-#import requests
+import requests
 from . import urls
 
 
 def _validate_response(response):
     """ Verify that response is OK """
     if response.status_code == 200:
+        print response.text
         return
     raise ResponseError(response.status_code, response.text)
 
@@ -73,6 +74,7 @@ class Session(object):
         response = None
         for base_url in urls.BASE_URLS:
             urls.BASE_URL = base_url
+            print urls.BASE_URL
             try:
                 response = requests.post(
                     urls.login(),
