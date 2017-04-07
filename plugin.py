@@ -15,6 +15,7 @@
 import Domoticz
 import base64
 import httplib2
+import hashlib
 from verisure import urls
 import json
 class BasePlugin:
@@ -163,35 +164,50 @@ def verisureCreateDevices():
 
     #Door Window Sensors
     for dev in res['doorWindow']['doorWindowDevice']:
-        Domoticz.Log('Creating doorWindow devices')
-        Domoticz.Device(Name=str(dev['area']), Unit=i, TypeName="Switch").Create()
-    
-        if(str(dev['state']) == "CLOSE"):
-            Devices[i].Update(nValue=0,sValue="CLOSED")
+        if i not in Devices.keys():
+            Domoticz.Log('Creating doorWindow devices')
+            Domoticz.Device(Name=str(dev['area']), Unit=i, TypeName="Switch").Create()
         else:
-            Devices[i].Update(nValue=1,sValue="OPEN")
+            if(str(dev['state']) != str(Devices[i].sValue)):
+                if(str(dev['state']) == "CLOSE"):
+                    Devices[i].Update(nValue=0,sValue="CLOSE")
+                else:
+                    Devices[i].Update(nValue=1,sValue="OPEN")
 
         i += 1
 		
 	#Temperature sensors
     for dev in res['climateValues']:
-        Domoticz.Log('Creating Temperature Devices')
-        Domoticz.Device(Name=str(dev['deviceArea']), Unit=i, TypeName="Temperature").Create()
-        Devices[i].Update(nValue=int(dev['temperature']),sValue=str(dev['temperature']))
+        if i not in Devices.keys():
+            Domoticz.Log('Creating Temperature Devices')
+            Domoticz.Device(Name=str(dev['deviceArea']), Unit=i, TypeName="Temperature").Create()
+        else:
+            if(int(Devices[i].nValue) != int(dev['temperature'])):
+                Devices[i].Update(nValue=int(dev['temperature']),sValue=str(dev['temperature']))
         i += 1
 	
     #Smartplug devices	
     for dev in res['smartPlugs']:
-        Domoticz.Log('Creating Smartplug Devices')
-        Domoticz.Device(Name=str(dev['area']), Unit=i, TypeName="Switch").Create()
-        if(str(dev['currentState']) == "OFF"):
-            Devices[i].Update(nValue=0,sValue="OFF")
+        devlabel = int(hashlib.sha256(dev['deviceLabel'].encode('utf-8')).hexdigest(), 16) % 3 ** 3
+        if devlabel not in Devices.keys():
+            Domoticz.Log('Creating Smartplug Devices')
+            Domoticz.Log(str(devlabel))
+            Domoticz.Device(Name=str(dev['area']), Unit=devlabel, TypeName="Switch").Create()
+            Domoticz.Log(str(Devices[devlabel]))
         else:
-            Devices[i].Update(nValue=1,sValue="ON")
+            if(str(dev['currentState']) != str(Devices[devlabel].sValue)):
+                if(str(dev['currentState']) == "OFF"):
+                    Devices[devlabel].Update(nValue=0,sValue="OFF")
+                else:
+                    Devices[devlabel].Update(nValue=1,sValue="ON")
         i += 1
 		
 	#Alarm devices	
-    Domoticz.Log('Creating Alarm device')
-    Domoticz.Device(Name="Alarm", Unit=i, TypeName="Text").Create()
-    Devices[i].Update(nValue=0,sValue=str(res['armState']['statusType'] + " - " + res['armState']['name']))
+    
+    if i not in Devices.keys():
+        Domoticz.Log('Creating Alarm device')
+        Domoticz.Device(Name="Alarm", Unit=i, TypeName="Text").Create()
+    else:
+        if(str(Devices[i].sValue) != str(res['armState']['statusType'] + " - " + res['armState']['name'])):
+            Devices[i].Update(nValue=0,sValue=str(res['armState']['statusType'] + " - " + res['armState']['name']))
     i += 1		
