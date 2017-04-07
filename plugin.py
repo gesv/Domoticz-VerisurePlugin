@@ -7,7 +7,7 @@
     <params>
         <param field="Username" label="Username" width="200px" required="true" default=""/>
         <param field="Password" label="Password" width="200px" required="true" default=""/>
-        <param field="Password" label="Url" width="200px" required="true" default=""/>
+        <param field="Mode1" label="Polling Interval (s)" width="200px" required="true" default="300"/>
     </params>
 </plugin>
 """
@@ -29,12 +29,9 @@ class BasePlugin:
         data = httplib2.Http('.cache')
         Domoticz.Debugging(1)
         Domoticz.Log("onStart called")
-        Domoticz.Heartbeat(600)
+        Domoticz.Heartbeat(int(Parameters['Mode1']))
         verisureLogin()
-        
-        #Domoticz.Protocol("HTTP")
-        #Domoticz.Transport(Transport="TCP/IP", Address='e-api01.verisure.com', Port='443')
-        #Domoticz.Connect()
+
     def onStop(self):
         Domoticz.Log("onStop called")
         
@@ -128,40 +125,45 @@ def verisureLogin():
              'Accept': 'application/json,'
                        'text/javascript, */*; q=0.01',
     }
-
-    (resp, content) = login.request("https://e-api02.verisure.com/xbn/2/cookie", 'POST', headers=headers)
-    res = json.loads(str(content.decode('utf-8')))
     global cookie
-    cookie = res['cookie']
-    Domoticz.Log(str(res['cookie']))
+    for base_url in urls.BASE_URLS:
+        urls.BASE_URL = base_url
+        (resp, content) = login.request(urls.login(), 'POST', headers=headers)
+        res = json.loads(str(content.decode('utf-8')))
+        if(resp.status == 200):
+            cookie = res['cookie']
+            Domoticz.Log("Successfully Logged in")
+            break
+        else:
+            Domoticz.Log('Login failed, trying next server')
+
     VerisureGetInstallation()
+
 
 def VerisureGetInstallation():
     headers={
             'Cookie': 'vid={}'.format(cookie),
             'Accept': 'application/json, text/javascript, */*; q=0.01',
             }
-    (resp, content) = data.request("https://e-api02.verisure.com/xbn/2/installation/search?email=" + Parameters['Username'], 'GET', headers=headers)
+    (resp, content) = data.request(urls.get_installations(Parameters['Username']), 'GET', headers=headers)
     res = json.loads(str(content.decode('utf-8')))
-
-    #Domoticz.Log(str(res[0]['giid']))
+    Domoticz.Log("Installation ID: " + str(res[0]['giid']))
     return res[0]['giid']
+	
 def verisureCreateDevices():
     headers={
             'Accept': 'application/json, text/javascript, */*; q=0.01',
             'Accept-Encoding': 'gzip, deflate',
             'Content-Type': 'application/json',
             'Cookie': 'vid={}'.format(cookie)}
-    (resp, content) = data.request("https://e-api02.verisure.com/xbn/2/installation/" + VerisureGetInstallation() + '/overview', 'GET', headers=headers)
+    (resp, content) = data.request(urls.overview(VerisureGetInstallation()), 'GET', headers=headers)
     res = json.loads(content.decode('utf-8'))
     #Domoticz.Log(str(res))
     i = 2
 
-    
+    #Door Window Sensors
     for dev in res['doorWindow']['doorWindowDevice']:
-        Domoticz.Log('Creating devices')
-        Domoticz.Log(str(dev['area']))
-        Domoticz.Log(str(dev['state']))
+        Domoticz.Log('Creating doorWindow devices')
         Domoticz.Device(Name=str(dev['area']), Unit=i, TypeName="Switch").Create()
     
         if(str(dev['state']) == "CLOSE"):
@@ -170,11 +172,26 @@ def verisureCreateDevices():
             Devices[i].Update(nValue=1,sValue="OPEN")
 
         i += 1
+		
+	#Temperature sensors
     for dev in res['climateValues']:
-        Domoticz.Log('Creating devices')
-        Domoticz.Log(str(dev['deviceArea']))
-        Domoticz.Log(str(dev['temperature']))
+        Domoticz.Log('Creating Temperature Devices')
         Domoticz.Device(Name=str(dev['deviceArea']), Unit=i, TypeName="Temperature").Create()
-
         Devices[i].Update(nValue=int(dev['temperature']),sValue=str(dev['temperature']))
         i += 1
+	
+    #Smartplug devices	
+    for dev in res['smartPlugs']:
+        Domoticz.Log('Creating Smartplug Devices')
+        Domoticz.Device(Name=str(dev['area']), Unit=i, TypeName="Switch").Create()
+        if(str(dev['currentState']) == "OFF"):
+            Devices[i].Update(nValue=0,sValue="OFF")
+        else:
+            Devices[i].Update(nValue=1,sValue="ON")
+        i += 1
+		
+	#Alarm devices	
+    Domoticz.Log('Creating Alarm device')
+    Domoticz.Device(Name="Alarm", Unit=i, TypeName="Text").Create()
+    Devices[i].Update(nValue=0,sValue=str(res['armState']['statusType'] + " - " + res['armState']['name']))
+    i += 1		
