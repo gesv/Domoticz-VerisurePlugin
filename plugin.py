@@ -3,7 +3,7 @@
 # Author: Gesv and Daniko
 #
 """
-<plugin key="Verisure" name="Verisure Alarm Central" author="gesv" version="1.0.0" wikilink="http://harmannenfalt.no" externallink="https://www.sau.no/">
+<plugin key="Verisure" name="Verisure Alarm Central" author="gesv" version="1.0.0" wikilink="https://github.com/gesv/Domoticz-VerisurePlugin/wiki">
     <params>
         <param field="Username" label="Username" width="200px" required="true" default=""/>
         <param field="Password" label="Password" width="200px" required="true" default=""/>
@@ -42,7 +42,7 @@ class BasePlugin:
         Domoticz.Log(str(Description))
 
     def onMessage(self, Data, Status, Extra):
-        Domoticz.Log("KUK")
+        Domoticz.Log("onMessage")
         
     def onCommand(self, Unit, Command, Level, Hue):
         Domoticz.Log("onCommand called for Unit " + str(Unit) + ": Parameter '" + str(Command) + "', Level: " + str(Level))
