@@ -1,2 +1,4 @@
-requests
+httlib2
+base64
+json
 vsure
