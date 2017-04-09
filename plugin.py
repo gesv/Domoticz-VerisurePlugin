@@ -15,7 +15,6 @@
 import Domoticz
 import base64
 import httplib2
-import hashlib
 from verisure import urls
 import json
 import yaml
@@ -47,8 +46,8 @@ class BasePlugin:
         Domoticz.Log("onMessage")
         
     def onCommand(self, Unit, Command, Level, Hue):
-        #Domoticz.Log("onCommand called for Unit " + str(Unit) + ": Parameter '" + str(Command) + "', Level: " + str(Level))
         verisureonCommand(Unit,Command)
+
     def onNotification(self, Name, Subject, Text, Status, Priority, Sound, ImageFile):
         Domoticz.Log("Notification: " + Name + "," + Subject + "," + Text + "," + Status + "," + str(Priority) + "," + Sound + "," + ImageFile)
 
@@ -108,12 +107,6 @@ def DumpConfigToLog():
         Domoticz.Debug("Device sValue:   '" + Devices[x].sValue + "'")
         Domoticz.Debug("Device LastLevel: " + str(Devices[x].LastLevel))
     return
-def _validate_response(response):
-    """ Verify that response is OK """
-    if response.status_code == 200:
-        Domoticz.Log(str(response))
-        return
-    raise Exception('')
 
 def verisureLogin():
     login = httplib2.Http('.cache')
@@ -161,7 +154,6 @@ def verisureCreateDevices():
             'Cookie': 'vid={}'.format(cookie)}
     (resp, content) = data.request(urls.overview(VerisureGetInstallation()), 'GET', headers=headers)
     res = json.loads(content.decode('utf-8'))
-    #Domoticz.Log(str(res))
     i = 2
 
     #Door Window Sensors
@@ -194,7 +186,6 @@ def verisureCreateDevices():
     for dev in res['smartPlugs']:
         devMap[i] = dict()
         devMap[i]['SmartPlug'] = dev['deviceLabel']
-        #devlabel = int(hashlib.sha256(dev['deviceLabel'].encode('utf-8')).hexdigest(), 16) % 3 ** 3
         if i not in Devices.keys():
             Domoticz.Log('Creating Smartplug Devices')
             Domoticz.Log(str(i))
@@ -207,9 +198,9 @@ def verisureCreateDevices():
                 else:
                     Devices[i].Update(nValue=1,sValue="ON")
         i += 1
-    Domoticz.Log(str(devMap))
-	#Alarm devices	
-    
+
+
+	#Alarm devices	    
     if i not in Devices.keys():
         Domoticz.Log('Creating Alarm device')
         Domoticz.Device(Name="Alarm", Unit=i, TypeName="Text").Create()
