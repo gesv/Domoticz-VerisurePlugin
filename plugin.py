@@ -18,6 +18,8 @@ import httplib2
 import hashlib
 from verisure import urls
 import json
+import yaml
+
 class BasePlugin:
     enabled = False
     def __init__(self):
@@ -45,8 +47,8 @@ class BasePlugin:
         Domoticz.Log("onMessage")
         
     def onCommand(self, Unit, Command, Level, Hue):
-        Domoticz.Log("onCommand called for Unit " + str(Unit) + ": Parameter '" + str(Command) + "', Level: " + str(Level))
-
+        #Domoticz.Log("onCommand called for Unit " + str(Unit) + ": Parameter '" + str(Command) + "', Level: " + str(Level))
+        verisureonCommand(Unit,Command)
     def onNotification(self, Name, Subject, Text, Status, Priority, Sound, ImageFile):
         Domoticz.Log("Notification: " + Name + "," + Subject + "," + Text + "," + Status + "," + str(Priority) + "," + Sound + "," + ImageFile)
 
@@ -187,21 +189,25 @@ def verisureCreateDevices():
         i += 1
 	
     #Smartplug devices	
+    global devMap 
+    devMap = dict()
     for dev in res['smartPlugs']:
-        devlabel = int(hashlib.sha256(dev['deviceLabel'].encode('utf-8')).hexdigest(), 16) % 3 ** 3
-        if devlabel not in Devices.keys():
+        devMap[i] = dict()
+        devMap[i]['SmartPlug'] = dev['deviceLabel']
+        #devlabel = int(hashlib.sha256(dev['deviceLabel'].encode('utf-8')).hexdigest(), 16) % 3 ** 3
+        if i not in Devices.keys():
             Domoticz.Log('Creating Smartplug Devices')
-            Domoticz.Log(str(devlabel))
-            Domoticz.Device(Name=str(dev['area']), Unit=devlabel, TypeName="Switch").Create()
-            Domoticz.Log(str(Devices[devlabel]))
+            Domoticz.Log(str(i))
+            Domoticz.Device(Name=str(dev['area']), Unit=i, TypeName="Switch").Create()
+            Domoticz.Log(str(Devices[i]))
         else:
-            if(str(dev['currentState']) != str(Devices[devlabel].sValue)):
+            if(str(dev['currentState']) != str(Devices[i].sValue)):
                 if(str(dev['currentState']) == "OFF"):
-                    Devices[devlabel].Update(nValue=0,sValue="OFF")
+                    Devices[i].Update(nValue=0,sValue="OFF")
                 else:
-                    Devices[devlabel].Update(nValue=1,sValue="ON")
+                    Devices[i].Update(nValue=1,sValue="ON")
         i += 1
-		
+    Domoticz.Log(str(devMap))
 	#Alarm devices	
     
     if i not in Devices.keys():
@@ -211,3 +217,29 @@ def verisureCreateDevices():
         if(str(Devices[i].sValue) != str(res['armState']['statusType'] + " - " + res['armState']['name'])):
             Devices[i].Update(nValue=0,sValue=str(res['armState']['statusType'] + " - " + res['armState']['name']))
     i += 1		
+
+
+
+def verisureonCommand(Unit,Command):
+    if Unit in devMap.keys():
+        if 'SmartPlug' in devMap[Unit].keys():
+            if Command == "On":
+                state = True
+                Value = 1
+            elif Command == "Off":
+                state = False
+                Value = 0
+
+            Domoticz.Log('verisureonCommand' + str(devMap[Unit]['SmartPlug']) + '' + str(Command))
+            deviceLabel = devMap[Unit]['SmartPlug']
+            headers={
+                'Content-Type': 'application/json',
+                'Cookie': 'vid={}'.format(cookie)}
+            smartplugdata=json.dumps([{
+                "deviceLabel": deviceLabel,
+                "state": state}])
+            (resp, content) = data.request(urls.smartplug(VerisureGetInstallation()), 'POST', smartplugdata, headers=headers)
+            if(str(resp.status) == "200"):
+                Devices[Unit].Update(nValue=Value,sValue=Command.upper())
+            else:
+                Domoticz.Log('Command for Unit '+str(Unit)+' failed. HTTP Code Returned: ' +str(resp.status))
